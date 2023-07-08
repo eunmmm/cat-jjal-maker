@@ -1,0 +1,167 @@
+import React from 'react';
+import './App.css';
+import Title from './components/Title'
+
+const jsonLocalStorage = {
+  // 로컬스트리지엔 데이터가 무조건 String으로 저장되어서 해소할 수 있는 유틸 생성
+  setItem: (key, value) => {
+    localStorage.setItem(key, JSON.stringify(value));
+  },
+  getItem: (key) => {
+    return JSON.parse(localStorage.getItem(key));
+  },
+};
+
+const fetchCat = async (text) => {
+  const OPEN_API_DOMAIN = "https://cataas.com";
+  const response = await fetch(`${OPEN_API_DOMAIN}/cat/says/${text}?json=true`);
+  const responseJson = await response.json();
+  return `${OPEN_API_DOMAIN}/${responseJson.url}`;
+};
+
+const Form = ({ updateMainCat }) => {
+  // 한글 파악할 수 있도록 하는 정규식
+  const includesHangul = (text) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/i.test(text);
+  const [value, setValue] = React.useState('')
+  // 에러메세지에 대한 상태
+  const [errorMessage, setErrorMessage] = React.useState('')
+
+  // 검색창에 입력시 반응하도록
+  function handleInputChange(e) {
+    // input 창에 입력시 실시간으로 값을 가져오기 위해 e.target.value 사용
+    const userValue = e.target.value
+    // 빈 값 검증 전에 무조건 초기화하기
+    setErrorMessage('');
+
+    // 한글 입력시 오류문구가 노출되도록 설정
+    if (includesHangul(userValue)) {
+      setErrorMessage("한글은 입력할 수 없습니다.")
+    }
+
+    // 소문자 입력시 대문자로 나오게 해주도록 toUpperCase 사용
+    setValue(userValue.toUpperCase())
+  }
+
+  function handleFormSubmit(e) {
+    e.preventDefault();
+    setErrorMessage('');
+    // 빈 값으로 생성을 했을 시 빈 값으로 생성할 수 없다고 노출
+    if (value === '') {
+      // 에러메시지를 보내지고 updateMainCat를 할 수 없기 때문에 return을 넣어줘서 함수가 updateMainCat까지 불리지 않고 끝날 수 있게 한다.
+      setErrorMessage("빈 값으로 만들 수 없습니다.")
+      return;
+    }
+    updateMainCat(value);
+  }
+  return (
+    <form onSubmit={handleFormSubmit}>
+      <input
+        type="text"
+        name="name"
+        placeholder="영어 대사를 입력해주세요"
+        value={value}
+        onChange={handleInputChange}
+      />
+      <button type="submit">생성</button>
+      <p style={{ color: 'red' }}>{errorMessage}</p>
+    </form>
+  )
+}
+
+function CatItem(props) {
+  return (
+    <li>
+      <img src={props.img} style={{ width: "150px" }} />
+    </li>
+  )
+}
+
+function Favorites({ favorites }) {
+  // 하트 눌른 사진이 없을 때 조건식
+  if (favorites.length === 0) {
+    return <div>사진 위 하트를 눌러 고양이 사진을 저장해봐요!</div>
+  }
+  return (
+    <ul className="favorites">
+      {favorites.map((cat, i) => <CatItem img={cat} key={i} />)}
+    </ul>
+  )
+}
+
+const MainCard = ({ img, onHeartClick, alreadyFavorite }) => {
+  const heartIcon = alreadyFavorite ? "💖" : "🤍"
+  return (
+    <div className="main-card">
+      <img
+        src={img}
+        alt="고양이"
+        width="400"
+      />
+      <button onClick={onHeartClick}>{heartIcon}</button>
+    </div>
+  )
+}
+const App = () => {
+  const CAT1 = "https://cataas.com/cat/HSENVDU4ZMqy7KQ0/says/react";
+  const CAT2 = "https://cataas.com/cat/BxqL2EjFmtxDkAm2/says/inflearn";
+  const CAT3 = "https://cataas.com/cat/18MD6byVC1yKGpXp/says/JavaScript";
+
+  // 로컬스토리지에 저장한 값 UI로 노출, 스트링으로 저장되기 때문에 숫자로 변환을 위해 Number() 안에 적용
+  // 로컬스토리지에 계속 접근하는건 시간부하가 걸린다. 카운터 올릴때마다 접근할 필요가 없기 때문에 앱이 실행될때 한 번만 접근하기 위해선 useState안에 함수를 써주면 된다.
+  const [counter, setCounter] = React.useState(() => {
+    return jsonLocalStorage.getItem('counter')
+  });
+  const [mainCat, setMainCat] = React.useState(CAT1);
+  // useState에 jsonLocalStorage.getItem('favorites') 이것만 설정하면 null map 에러가 난다. 초기값을 로컬스토리지에서 불러오는데 로컬스토리지에 해당 데이터가 없어서 에러가 나는 것
+  const [favorites, setFavorites] = React.useState(() => {
+    return jsonLocalStorage.getItem('favorites') || []
+  });
+
+  const alreadyFavorite = favorites.includes(mainCat)
+
+  async function setInitialCat() {
+    const newCat = await fetchCat('first cat');
+    setMainCat(newCat)
+  }
+
+  // setInitialCat()을 useEffect 밖에다가 호출하게 되면 이미지가 쉴 새 없이 뜨게 된다. 로드시 한 번만 나오게 하려면 useEffect 안에 호출해야한다. ([] 없는 기준)
+  // ,[] 가 왜 있을까? useEffect도 ui가 변경될때 마다 발생을 하지만, [] 이 부분에 제한되는 영역을 기재할 수 있다. 빈배열은 맨처음에만 불릴 때를 말하고, 그 외에 원하는 상태를 넣어줄 수 있다 ex)) counter는 counter가 변경될 때마다 바뀐다..이런식~
+  React.useEffect(() => {
+    setInitialCat()
+  }, [])
+
+  async function updateMainCat(value) {
+    // 생성 버튼 누르고 이미지 변경 시 이미지에 있는 텍스트 적용을 위해 value 불러옴
+    const newCat = await fetchCat(value);
+
+    // 카운터를 늘리는 것은 부가적인 옵션, 이미지 로드가 먼저일 것 같기 때문에 이미지 로드 되는 코드를 먼저 올림
+    setMainCat(newCat)
+    // setcounter와 counter가 바라보는 위치가 달라 prev로 설정, 기존 값이다. setCounter를 변경하기 전인 기존값을 함수 첫번째 인자로 들고올 수 있게된다.
+    setCounter((prev) => {
+      const nextCounter = prev + 1;
+      // 로컬스토리지에 있는 카운터도 같이 업데이트
+      jsonLocalStorage.setItem('counter', nextCounter)
+      return nextCounter
+    })
+  }
+
+  function handleHeartClick() {
+    const nextFavorites = [...favorites, mainCat];
+    jsonLocalStorage.setItem('favorites', nextFavorites)
+    setFavorites(nextFavorites)
+  }
+
+  // counter가 0일때 텍스트 교체
+  const counterTitle = counter === null ? "" : counter + "번째 "
+
+  return (
+    <div>
+      <Title>{counterTitle}고양이 가라시대</Title>
+      <Form updateMainCat={updateMainCat} />
+      <MainCard img={mainCat} onHeartClick={handleHeartClick} alreadyFavorite={alreadyFavorite} />
+      <Favorites favorites={favorites} />
+    </div>
+  )
+}
+
+export default App;
